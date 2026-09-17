@@ -14,42 +14,36 @@ Developed and maintained by **[Sakshi Pandey](https://github.com/blue007-arc)** 
 
 ## 🏗️ Architectural Overview
 
-```
-                          ┌────────────────────────┐
-                          │     User Objective     │
-                          └───────────┬────────────┘
-                                      ▼
-                          ┌────────────────────────┐
-                          │     Planner Agent      │  (Drafts phased repair plan)
-                          └───────────┬────────────┘
-                                      ▼
-                          ┌────────────────────────┐
-                          │     Explorer Agent     │  (Inspects AST / file trees)
-                          └───────────┬────────────┘
-                                      ▼
-                          ┌────────────────────────┐
-                          │      Coder Agent       │  (Mechanical difflib generation)
-                          └───────────┬────────────┘
-                                      ▼
-                      ┌────────────────────────────────┐
-                      │  Diff Review Gate (LangGraph)  │ ⏸️ PAUSE (interrupt)
-                      └───────┬────────────────┬───────┘
-                     Approved │                │ Rejected with feedback
-                              ▼                └───────────────────────┐
-                      ┌────────────────┐                               │
-                      │  Apply Diffs   │ (Writes to disk)              │
-                      └───────┬────────┘                               │
-                              ▼                                        │
-                      ┌────────────────┐                               │
-                      │   E2B Sandbox  │ (Executes pytest in VM)       │
-                      └───────┬────────┘                               │
-                              │                                        │
-                 Tests Pass?  ├─────────────► Tests Fail ──────────────┘
-                              │               (Feeds stderr back into coder)
-                              ▼
-                      ┌────────────────┐
-                      │  Complete (✅)  │
-                      └────────────────┘
+```mermaid
+graph TD
+    classDef startNode fill:#1E293B,stroke:#38BDF8,stroke-width:2px,color:#F8FAFC;
+    classDef agentNode fill:#0F172A,stroke:#818CF8,stroke-width:2px,color:#F8FAFC;
+    classDef gateNode fill:#7C2D12,stroke:#F97316,stroke-width:2px,color:#FFF;
+    classDef sandboxNode fill:#3B0764,stroke:#C084FC,stroke-width:2px,color:#FFF;
+    classDef successNode fill:#064E3B,stroke:#34D399,stroke-width:2px,color:#FFF;
+
+    Obj["🎯 User Objective & Buggy Workspace"]:::startNode --> Plan["📋 Planner Agent<br/><i>(Drafts repair strategy)</i>"]:::agentNode
+    Plan --> Exp["🔍 Explorer Agent<br/><i>(Inspects AST & workspace file tree)</i>"]:::agentNode
+    Exp --> Code["💻 Coder Agent<br/><i>(Mechanical difflib patch generation)</i>"]:::agentNode
+    
+    subgraph HumanApprovalGate ["🛡️ LangGraph Human-in-the-Loop Review"]
+        Code --> Review{"⏸️ interrupt()<br/>Pending User Review"}:::gateNode
+    end
+
+    Review -- "❌ Rejected (with reason)" --> Feedback["📝 Structured Rejection Feedback"]:::agentNode
+    Feedback --> Code
+
+    Review -- "✅ Approved Patch" --> Apply["💾 Apply Diffs Node<br/><i>(Atomic disk write)</i>"]:::agentNode
+    
+    subgraph ExecutionSandbox ["📦 Isolated E2B Cloud Sandbox"]
+        Apply --> Sandbox["⚡ E2B Micro-VM<br/><i>(Executes pytest in isolated sandbox)</i>"]:::sandboxNode
+        Sandbox --> TestResult{"Tests Pass?"}
+    end
+
+    TestResult -- "❌ Pytest Failures" --> RedFeedback["⚠️ Pytest Failure Traceback"]:::agentNode
+    RedFeedback --> Code
+
+    TestResult -- "✅ All Green" --> Done["🎉 Verified & Completed"]:::successNode
 ```
 
 ---
